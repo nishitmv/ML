@@ -16,6 +16,8 @@ model = tf.keras.models.Sequential([
     tf.keras.layers.Conv2D(64, (3, 3), input_shape=(28, 28, 1), activation='relu'),  # rectified linear unit ensures
     # filtering outputs and picks only >0. (3, 3) is a 3 x 3 filter , 64 = number of convolutions ( filters ) .
     tf.keras.layers.MaxPooling2D(2, 2),  # Size of max pool matrix( max pool picks max value from n x n matrix)
+    tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),  # Second layer of convolutions
+    tf.keras.layers.MaxPooling2D(2, 2),
     tf.keras.layers.Flatten(),  # Flatten 2d array to 1d array
     tf.keras.layers.Dense(128, activation=tf.nn.relu),  # Number of Neurons
     tf.keras.layers.Dense(10, activation=tf.nn.softmax)  # Max value for 1 of ten items this code is trying to find
@@ -31,4 +33,5 @@ classifications = model.predict(test_images)
 
 print(classifications[0])
 print(test_labels[0])
+model.summary()
 

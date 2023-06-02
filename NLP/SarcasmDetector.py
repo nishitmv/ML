@@ -57,7 +57,7 @@ test_labels = labels[training_size:]
 tokenizer = tf.keras.preprocessing.text.Tokenizer(oov_token="<OOV>", num_words=3000)
 tokenizer.fit_on_texts(training_sentences)
 trainingSeqs = tokenizer.texts_to_sequences(training_sentences)
-trainingPaddedSeqs = pad_sequences(trainingSeqs, padding='post', maxlen=70)
+trainingPaddedSeqs = pad_sequences(trainingSeqs, padding='post', maxlen=85)
 
 wc = tokenizer.word_counts
 
@@ -77,7 +77,7 @@ plt.show()
 tokenizerTest = tf.keras.preprocessing.text.Tokenizer(oov_token="<OOV>", num_words=3000)
 tokenizerTest.fit_on_texts(test_sentences)
 testSeqs = tokenizerTest.texts_to_sequences(test_sentences)
-testPaddedSeqs = pad_sequences(testSeqs, padding='post', maxlen=70)
+testPaddedSeqs = pad_sequences(testSeqs, padding='post', maxlen=85)
 
 trainingPaddedSeqs = np.array(trainingPaddedSeqs)
 training_labels = np.array(training_labels)
@@ -89,14 +89,27 @@ print(len(trainingPaddedSeqs))
 model = tf.keras.Sequential([
     tf.keras.layers.Embedding(3000, 8),
     tf.keras.layers.GlobalAveragePooling1D(),
-    tf.keras.layers.Dense(10, tf.nn.relu),
+    tf.keras.layers.Dense(9, tf.nn.relu, kernel_regularizer= tf.keras.regularizers.l2(0.01)),
     tf.keras.layers.Dense(1, tf.nn.sigmoid)
 ])
-adam = tf.keras.optimizers.Adam(learning_rate=0.0001, beta_1=0.9, beta_2=0.999, amsgrad=False)
+adam = tf.keras.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=False)
 model.compile(optimizer=adam, loss=tf.losses.binary_crossentropy, metrics=['accuracy'])
 
 model.summary()
 
 model.fit(trainingPaddedSeqs, training_labels, epochs=80, validation_data=(testPaddedSeqs, test_labels))
+
+sentences = ["granny starting to fear spiders in the garden might be real",
+"game of thrones season finale showing this sunday night",
+"TensorFlow book will be a best seller"]
+
+evalSeq = tokenizer.texts_to_sequences(sentences)
+print(evalSeq)
+
+padded = pad_sequences(evalSeq, maxlen=85, padding='post')
+
+print(padded)
+
+print(model.predict(padded))
 
 # model.evaluate(testPaddedSeqs, test_labels)

@@ -1,3 +1,4 @@
+import io
 import json
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -74,6 +75,9 @@ plt.axis([300, 3000, 0, 100])
 plt.plot(xs, ys)
 plt.show()
 
+reverse_word_index = dict([(value, key)
+                           for (key, value) in tokenizer.word_index.items()])
+
 tokenizerTest = tf.keras.preprocessing.text.Tokenizer(oov_token="<OOV>", num_words=3000)
 tokenizerTest.fit_on_texts(test_sentences)
 testSeqs = tokenizerTest.texts_to_sequences(test_sentences)
@@ -89,7 +93,7 @@ print(len(trainingPaddedSeqs))
 model = tf.keras.Sequential([
     tf.keras.layers.Embedding(3000, 8),
     tf.keras.layers.GlobalAveragePooling1D(),
-    tf.keras.layers.Dense(9, tf.nn.relu, kernel_regularizer= tf.keras.regularizers.l2(0.01)),
+    tf.keras.layers.Dense(9, tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.01)),
     tf.keras.layers.Dense(1, tf.nn.sigmoid)
 ])
 adam = tf.keras.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, amsgrad=False)
@@ -100,8 +104,8 @@ model.summary()
 model.fit(trainingPaddedSeqs, training_labels, epochs=80, validation_data=(testPaddedSeqs, test_labels))
 
 sentences = ["granny starting to fear spiders in the garden might be real",
-"game of thrones season finale showing this sunday night",
-"TensorFlow book will be a best seller"]
+             "game of thrones season finale showing this sunday night",
+             "TensorFlow book will be a best seller"]
 
 evalSeq = tokenizer.texts_to_sequences(sentences)
 print(evalSeq)
@@ -113,3 +117,17 @@ print(padded)
 print(model.predict(padded))
 
 # model.evaluate(testPaddedSeqs, test_labels)
+e = model.layers[0]
+weights = e.get_weights()[0]
+print(weights.shape)
+
+out_v = io.open('vecs.tsv', 'w', encoding='utf-8')
+out_m = io.open('meta.tsv', 'w', encoding='utf-8')
+for word_num in range(1, 3000):
+    word = reverse_word_index[word_num]
+    embeddings = weights[word_num]
+    out_m.write(word + "\n")
+    out_v.write('\t'.join([str(x) for x in embeddings]) + "\n")
+out_v.close()
+out_m.close()
+

@@ -1,9 +1,10 @@
 import keras.metrics
 import numpy as np
-import keras_tuner.engine.hyperparameters as hp
 from keras_tuner import RandomSearch
 from matplotlib import pyplot as plt
 import tensorflow as tf
+from tensorflow import keras
+import keras_tuner
 
 
 def plot_series(time, series, fmt="-", start=0, end=None):
@@ -64,38 +65,40 @@ batch_size = 32
 shuffle_buffer_size = 1000
 
 dataset = windowed_dataset(x_train, window_size, batch_size, shuffle_buffer_size)
+hp = keras_tuner.HyperParameters()
 
-model = tf.keras.models.Sequential()
+model = keras.Sequential()
 # model.add(tf.keras.layers.Dense(units=28, activation='relu', input_shape=[window_size]))
-model.add(tf.keras.layers.Conv1D(filters=128, kernel_size=3,
-                                 strides=1, padding="causal", activation="relu",
-                                 input_shape=[None, 1]))
-model.add(tf.keras.layers.Dense(28, activation=tf.nn.relu))
-model.add(tf.keras.layers.Dense(10, activation=tf.nn.relu))
-model.add(tf.keras.layers.Dense(1))
+# filterParam = hp.Int('units', min_value=128, max_value=256, step=64)
+# kernel_size_param = hp.Int('kernels', min_value=3, max_value=9, step=3)
+# strides_param = hp.Int('strides', min_value=1, max_value=3, step=1)
+model.add(keras.layers.Conv1D(filters=hp.Int(name='units', min_value=128, max_value=256, step=64),
+                              kernel_size=hp.Int(name='kernels', min_value=3, max_value=9, step=3),
+                              strides=hp.Int(name='strides', min_value=1, max_value=3, step=1), padding="causal",
+                              activation="relu",
+                              input_shape=[None, 1]))
+model.add(keras.layers.Dense(28, input_shape=[window_size], activation=tf.nn.relu))
+model.add(keras.layers.Dense(10, activation=tf.nn.relu))
+model.add(keras.layers.Dense(1))
+model.compile(loss="mse", optimizer="adam", metrics="loss")
+# plot_series(time_train, x_train)
 
-plot_series(time_train, x_train)
 
 
-model.compile(loss="mse", optimizer="adam")
 
-model.fit(dataset, epochs=50, verbose=1)
+# model.fit(dataset, epochs=50, verbose=1)
 # tuner.search(dataset, epochs=100, verbose=0)
-print(series[1000:1020])
+# print(series[1000:1020])
 # print(model.predict(series[1000:1020][np.newaxis]))
-print(series[1020])
+# print(series[1020])
 
+tuner = RandomSearch(hypermodel=model, objective='loss',
+                     max_trials=500, executions_per_trial=3,
+                     directory='my_dir', project_name='cnn-tune')
+tuner.search_space_summary()
+tuner.search(dataset, epochs=100, verbose=2)
 
-def model_forecast(model, series, window_size):
-    ds = tf.data.Dataset.from_tensor_slices(series)
-    ds = ds.window(window_size, shift=1, drop_remainder=True)
-    ds = ds.flat_map(lambda w: w.batch(window_size))
-    ds = ds.batch(32).prefetch(1)
-    forecast = model.predict(ds)
-    return forecast
-
-
-forecastRes = model_forecast(model, series[..., np.newaxis], window_size)
-results = forecastRes[split_time - window_size:-1, -1, 0]
+# forecastRes = model_forecast(model, series[..., np.newaxis], window_size)
+# results = forecastRes[split_time - window_size:-1, -1, 0]
 # print(results)
-#plot_series(time, forecastRes)
+# plot_series(time, forecastRes)

@@ -117,7 +117,12 @@ def ucb_exploration(Q, N, s, c, t):
 
     # Select action with max UCB value.
     max_ucb = max(ucb_vals.values())
-    max_actions = [a for a, v in ucb_vals.items() if v == max_ucb]
+    max_actions = []
+    for (action, value) in ucb_vals.items():
+        if value == max_ucb:
+            max_actions.append(action)
+
+
     return np.random.choice(max_actions)
 # --- 3. UPDATE RULES ---
 
@@ -212,24 +217,35 @@ def double_q_learning_update(QA, QB, s, a, r, s2, a2, gamma, alpha, grid):
     # TODO: Implement double_q_learning_update function
     # Randomly choose Q_upd (the one to update) and Q_sel (the one for selection).
 
-    Q_upd, Q_sel = QA, QB  # Initialize Q_upd, Q_sel correctly here
+
     updated_is_QA = None  # Initialize a flag to check if QA was updated or QB
     if np.random.rand() < 0.5:
         Q_upd, Q_sel = QA, QB
+        updated_is_QA = True
     else:
         Q_upd, Q_sel = QB, QA
+        updated_is_QA = False
 
     if grid.is_terminal(s2):
         target = r
+    elif s2 not in Q_upd or not Q_upd[s2]:
+        target = r
     else:
-        target =r+gamma* Q_sel[s2][max_dict(Q_upd[s2][a])]
+        max_action = max_dict(Q_upd[s2])
+        if s2 in Q_sel and max_action in Q_sel[s2]:
+            target =r+gamma* Q_sel[s2][max_action]
+        else:
+            target = r
 
     # Calculate the target (Read the docstring carefully)
     #     Q_upd(s, a) <- Q_upd(s, a) + alpha * [r + gamma * Q_sel(s2, argmax_a' Q_upd(s2, a')) - Q_upd(s, a)]
     Q_upd[s][a] = Q_upd[s][a]+ alpha* (target - Q_upd[s][a])
 
     # TODO : return the correct (QA, QB) tuple based on which was updated
-    return Q_upd, Q_sel
+    if updated_is_QA:
+        return QA, QB
+    else:
+        return QB, QA
 
 
 # --- 4. CONTROL LOOP ---
@@ -383,7 +399,7 @@ def plot_path(grid, path, title, ax):
 # --- 6. MAIN EXECUTION ---
 
 def run_all_experiments():
-    N_EPISODES = 2000
+    N_EPISODES = 200
     ALPHA = 0.5
     ALPHA_DOUBLE_Q = 0.997
     GAMMA = 1.0
@@ -400,7 +416,7 @@ def run_all_experiments():
         #("d) Q-Learning, UCB", 'Q-Learning', 'UCB', {'c': UCB_C}),
         #("e) Exp. Q-Learning, ε-greedy", 'Expected Q-Learning', 'Epsilon-greedy', {'eps': EPSILON}),
         #("f) Exp. Q-Learning, UCB", 'Expected Q-Learning', 'UCB', {'c': UCB_C}),
-        ("g) Double Q-Learning, ε-greedy", 'Double Q-Learning', 'Epsilon-greedy', {'eps': EPSILON}),
+        #("g) Double Q-Learning, ε-greedy", 'Double Q-Learning', 'Epsilon-greedy', {'eps': EPSILON}),
         ("h) Double Q-Learning, UCB", 'Double Q-Learning', 'UCB', {'c': UCB_C}),
     ]
 

@@ -212,22 +212,24 @@ def double_q_learning_update(QA, QB, s, a, r, s2, a2, gamma, alpha, grid):
     # TODO: Implement double_q_learning_update function
     # Randomly choose Q_upd (the one to update) and Q_sel (the one for selection).
 
-    Q_upd, Q_sel = None, None  # Initialize Q_upd, Q_sel correctly here)
+    Q_upd, Q_sel = QA, QB  # Initialize Q_upd, Q_sel correctly here
     updated_is_QA = None  # Initialize a flag to check if QA was updated or QB
     if np.random.rand() < 0.5:
-        # TODO : Write code here
-        print('Kindly implement the random selection of Q_upd and Q_sel')
+        Q_upd, Q_sel = QA, QB
     else:
-        # TODO : Write code here
-        print('Kindly implement the random selection of Q_upd and Q_sel')
+        Q_upd, Q_sel = QB, QA
+
+    if grid.is_terminal(s2):
+        target = r
+    else:
+        target =r+gamma* Q_sel[s2][max_dict(Q_upd[s2][a])]
 
     # Calculate the target (Read the docstring carefully)
-    target = 0.0  # TODO : Placeholder, Implement correctly here
-
-    # TODO : write the update rule here
+    #     Q_upd(s, a) <- Q_upd(s, a) + alpha * [r + gamma * Q_sel(s2, argmax_a' Q_upd(s2, a')) - Q_upd(s, a)]
+    Q_upd[s][a] = Q_upd[s][a]+ alpha* (target - Q_upd[s][a])
 
     # TODO : return the correct (QA, QB) tuple based on which was updated
-    raise NotImplementedError("double_q_learning_update not fully implemented. Student must complete the update rule.")
+    return Q_upd, Q_sel
 
 
 # --- 4. CONTROL LOOP ---
@@ -304,7 +306,7 @@ def run_control(grid, Q_init, N_init, n_episodes, alpha, gamma,
                 # Single Q-Table Algorithm update
                 if algorithm_name == "Expected Q-Learning":
 
-                    Q1 =  update_fn(Q1, s, a, r, s2, a2, gamma, alpha, grid, eps=eps)
+                    Q1 =  update_fn(Q1, s, a, r, s2, a2, gamma, alpha, grid, eps)
                 else:
                     # SARSA or Q-Learning update
                     Q1 =  update_fn(Q1, s, a, r, s2, a2, gamma, alpha, grid)
@@ -381,7 +383,7 @@ def plot_path(grid, path, title, ax):
 # --- 6. MAIN EXECUTION ---
 
 def run_all_experiments():
-    N_EPISODES = 4000
+    N_EPISODES = 2000
     ALPHA = 0.5
     ALPHA_DOUBLE_Q = 0.997
     GAMMA = 1.0
@@ -396,10 +398,10 @@ def run_all_experiments():
         #("b) SARSA, UCB", 'SARSA', 'UCB', {'c': UCB_C}),
         #("c) Q-Learning, ε-greedy", 'Q-Learning', 'Epsilon-greedy', {'eps': EPSILON}),
         #("d) Q-Learning, UCB", 'Q-Learning', 'UCB', {'c': UCB_C}),
-        ("e) Exp. Q-Learning, ε-greedy", 'Expected Q-Learning', 'Epsilon-greedy', {'eps': EPSILON}),
+        #("e) Exp. Q-Learning, ε-greedy", 'Expected Q-Learning', 'Epsilon-greedy', {'eps': EPSILON}),
         #("f) Exp. Q-Learning, UCB", 'Expected Q-Learning', 'UCB', {'c': UCB_C}),
-        #("g) Double Q-Learning, ε-greedy", 'Double Q-Learning', 'Epsilon-greedy', {'eps': EPSILON}),
-        #("h) Double Q-Learning, UCB", 'Double Q-Learning', 'UCB', {'c': UCB_C}),
+        ("g) Double Q-Learning, ε-greedy", 'Double Q-Learning', 'Epsilon-greedy', {'eps': EPSILON}),
+        ("h) Double Q-Learning, UCB", 'Double Q-Learning', 'UCB', {'c': UCB_C}),
     ]
 
     Q_init = {}

@@ -170,19 +170,29 @@ def expected_q_learning_update(Q, s, a, r, s2, a2, gamma, alpha, grid, eps=0.2):
 
     E[Q(s2, A)] = sum_a pi(a | s2) * Q(s2, a)
     """
-    if grid.is_terminal(s2):
+    #print("EXPECTED Q LEARNING")
+    n = len(ALL_POSSIBLE_ACTIONS)
+    if grid.game_over():
+        expected_q_s2 = 0.0
+    elif grid.is_terminal(s2):
         expected_q_s2 = 0.0
     else:
         expected_q_s2 = 0.0
-        # TODO: Compute expected_q_s2
-        a_star, _ = max_dict(Q[s2])
-        pi_star = 0  # Placeholder, Implement correctly here
-        pi_other = 0  # Placeholder, Implement Correctly here
+        # Compute expected_q_s2
 
-        raise NotImplementedError(
-            "expected_q_learning_update not fully implemented. Student must complete the expected value calculation.")
+        a_star, _ = max_dict(Q[s2])
+        for action in ALL_POSSIBLE_ACTIONS:
+            if action == a_star:
+                pi_star =  1 - eps + eps / n
+                expected_q_s2 += pi_star*Q[s2][a]
+            else:
+                pi_other =eps / n
+                expected_q_s2 += pi_other*Q[s2][a]
 
     # Now perform the update below
+
+    Q[s][a] =  Q[s][a] + alpha * (r + gamma * expected_q_s2 - Q[s][a])
+
     return Q
 
 
@@ -371,7 +381,7 @@ def plot_path(grid, path, title, ax):
 # --- 6. MAIN EXECUTION ---
 
 def run_all_experiments():
-    N_EPISODES = 300
+    N_EPISODES = 4000
     ALPHA = 0.5
     ALPHA_DOUBLE_Q = 0.997
     GAMMA = 1.0
@@ -382,11 +392,11 @@ def run_all_experiments():
     results = {}
 
     experiments = [
-        ("a) SARSA, ε-greedy", 'SARSA', 'Epsilon-greedy', {'eps': EPSILON}),
-        ("b) SARSA, UCB", 'SARSA', 'UCB', {'c': UCB_C}),
-        ("c) Q-Learning, ε-greedy", 'Q-Learning', 'Epsilon-greedy', {'eps': EPSILON}),
-        ("d) Q-Learning, UCB", 'Q-Learning', 'UCB', {'c': UCB_C}),
-        #("e) Exp. Q-Learning, ε-greedy", 'Expected Q-Learning', 'Epsilon-greedy', {'eps': EPSILON}),
+        #("a) SARSA, ε-greedy", 'SARSA', 'Epsilon-greedy', {'eps': EPSILON}),
+        #("b) SARSA, UCB", 'SARSA', 'UCB', {'c': UCB_C}),
+        #("c) Q-Learning, ε-greedy", 'Q-Learning', 'Epsilon-greedy', {'eps': EPSILON}),
+        #("d) Q-Learning, UCB", 'Q-Learning', 'UCB', {'c': UCB_C}),
+        ("e) Exp. Q-Learning, ε-greedy", 'Expected Q-Learning', 'Epsilon-greedy', {'eps': EPSILON}),
         #("f) Exp. Q-Learning, UCB", 'Expected Q-Learning', 'UCB', {'c': UCB_C}),
         #("g) Double Q-Learning, ε-greedy", 'Double Q-Learning', 'Epsilon-greedy', {'eps': EPSILON}),
         #("h) Double Q-Learning, UCB", 'Double Q-Learning', 'UCB', {'c': UCB_C}),

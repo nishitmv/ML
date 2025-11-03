@@ -214,7 +214,6 @@ def double_q_learning_update(QA, QB, s, a, r, s2, a2, gamma, alpha, grid):
 
     If s2 is terminal, the target is simply r.
     """
-    # TODO: Implement double_q_learning_update function
     # Randomly choose Q_upd (the one to update) and Q_sel (the one for selection).
 
 
@@ -231,7 +230,15 @@ def double_q_learning_update(QA, QB, s, a, r, s2, a2, gamma, alpha, grid):
     elif s2 not in Q_upd or not Q_upd[s2]:
         target = r
     else:
-        max_action = max_dict(Q_upd[s2])
+         # ARGMAX of a for s2 - get best q value and assign action to best action, do for all q values
+        max_q = -999999
+        max_action = None
+        for action in Q_upd.get(s2, {}):
+            q_value = Q_upd[s2][action]
+            if q_value > max_q:
+                max_q = q_value
+                max_action = action
+
         if s2 in Q_sel and max_action in Q_sel[s2]:
             target =r+gamma* Q_sel[s2][max_action]
         else:
@@ -241,7 +248,6 @@ def double_q_learning_update(QA, QB, s, a, r, s2, a2, gamma, alpha, grid):
     #     Q_upd(s, a) <- Q_upd(s, a) + alpha * [r + gamma * Q_sel(s2, argmax_a' Q_upd(s2, a')) - Q_upd(s, a)]
     Q_upd[s][a] = Q_upd[s][a]+ alpha* (target - Q_upd[s][a])
 
-    # TODO : return the correct (QA, QB) tuple based on which was updated
     if updated_is_QA:
         return QA, QB
     else:
@@ -416,7 +422,7 @@ def run_all_experiments():
         #("d) Q-Learning, UCB", 'Q-Learning', 'UCB', {'c': UCB_C}),
         #("e) Exp. Q-Learning, ε-greedy", 'Expected Q-Learning', 'Epsilon-greedy', {'eps': EPSILON}),
         #("f) Exp. Q-Learning, UCB", 'Expected Q-Learning', 'UCB', {'c': UCB_C}),
-        #("g) Double Q-Learning, ε-greedy", 'Double Q-Learning', 'Epsilon-greedy', {'eps': EPSILON}),
+        ("g) Double Q-Learning, ε-greedy", 'Double Q-Learning', 'Epsilon-greedy', {'eps': EPSILON}),
         ("h) Double Q-Learning, UCB", 'Double Q-Learning', 'UCB', {'c': UCB_C}),
     ]
 

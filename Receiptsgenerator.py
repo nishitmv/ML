@@ -5,7 +5,7 @@ import random
 import string
 
 # Configurations
-RECEIPT_WIDTH = 512
+RECEIPT_WIDTH = 750
 RECEIPT_HEIGHT = 1024
 PADDING = 20
 BG_COLOR = 'white'
@@ -25,26 +25,34 @@ def draw_dashed_line(draw, y, width, font, dash="-"):
     draw.text((PADDING, y), line, fill=TEXT_COLOR, font=font)
 
 def generate_receipt_image(receipt, output_folder):
-    # Spacing controls (adjust as needed)
-    address_line_gap = 8  # pixels between address lines
-    item_line_gap = 8     # pixels between item rows
-    total_line_gap = 8    # pixels between total/summary fields
-    section_gap = 14      # pixels between major sections
-
-    RECEIPT_WIDTH = 512
-    RECEIPT_HEIGHT = 1024
-    PADDING = 20
+    # Settings
+    RECEIPT_WIDTH = 700
+    RECEIPT_HEIGHT = 1100
+    PADDING = 28
     BG_COLOR = 'white'
     TEXT_COLOR = 'black'
-    FONT_PATH = 'cour.ttf'   # Make sure you have a monospaced font TTF on your system
+    FONT_PATH = 'cour.ttf'
     FONT_SIZE = 20
 
-    dash_line = "-" * 44
+    address_line_gap = 8
+    item_line_gap = 8
+    total_line_gap = 8
+    section_gap = 16
+    dash_line = "-" * 60
 
     image = Image.new('RGB', (RECEIPT_WIDTH, RECEIPT_HEIGHT), BG_COLOR)
     draw = ImageDraw.Draw(image)
     font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
     y = PADDING
+
+    # Helper for text height
+    def get_text_height(font, text):
+        bbox = font.getbbox(text)
+        return bbox[3] - bbox[1]
+
+    # Compute column positions
+    amount_width_max = 140  # Arbitrary, ensures right margin for amounts
+    amount_x = RECEIPT_WIDTH - PADDING - amount_width_max
 
     # Merchant and address
     draw.text((PADDING, y), receipt['Merchant'], fill=TEXT_COLOR, font=font)
@@ -54,25 +62,24 @@ def generate_receipt_image(receipt, output_folder):
         draw.text((PADDING, y), addr, fill=TEXT_COLOR, font=font)
         y += get_text_height(font, addr) + address_line_gap
 
-    # Dash line directly under address
     draw.text((PADDING, y), dash_line, fill=TEXT_COLOR, font=font)
     y += get_text_height(font, dash_line) + section_gap
 
-    # Receipt info
+    # Info section
     draw.text((PADDING, y), f"Slip:  {receipt['Receipt ID']}", fill=TEXT_COLOR, font=font)
     y += get_text_height(font, f"Slip:  {receipt['Receipt ID']}") + address_line_gap
     draw.text((PADDING, y), f"Date:  {receipt['Date']}  {receipt['Time']}", fill=TEXT_COLOR, font=font)
     y += get_text_height(font, f"Date:  {receipt['Date']}  {receipt['Time']}") + section_gap
 
-    # Dash line before items
     draw.text((PADDING, y), dash_line, fill=TEXT_COLOR, font=font)
     y += get_text_height(font, dash_line) + address_line_gap
 
-    # Item header
-    draw.text((PADDING, y), "Description".ljust(30) + "Amount".rjust(14), fill=TEXT_COLOR, font=font)
+    # Table header, pixel-aligned
+    draw.text((PADDING, y), "Description", fill=TEXT_COLOR, font=font)
+    draw.text((amount_x, y), "Amount", fill=TEXT_COLOR, font=font)
     y += get_text_height(font, 'X') + item_line_gap
 
-    # Line items (with even spacing)
+    # Item lines, pixel-aligned
     items = receipt['Line Items'].split(';')
     for item in items:
         item = item.strip()
@@ -81,15 +88,15 @@ def generate_receipt_image(receipt, output_folder):
             desc, amt = desc.strip(), amt.strip()
         else:
             desc, amt = item, ""
-        draw.text((PADDING, y), desc.ljust(30) + amt.rjust(14), fill=TEXT_COLOR, font=font)
+        draw.text((PADDING, y), desc, fill=TEXT_COLOR, font=font)
+        draw.text((amount_x, y), amt, fill=TEXT_COLOR, font=font)
         y += get_text_height(font, desc) + item_line_gap
 
     y += item_line_gap // 2
-    # Dash line below items
     draw.text((PADDING, y), dash_line, fill=TEXT_COLOR, font=font)
     y += get_text_height(font, dash_line) + section_gap
 
-    # Totals/summary section (with spacing)
+    # Totals section, pixel-aligned
     for (label, key) in [
         ("Subtotal", 'Subtotal'),
         ("Tax", 'Tax'),
@@ -97,21 +104,21 @@ def generate_receipt_image(receipt, output_folder):
         ("Card", 'Card Payment'),
         ("Cash", 'Cash Payment'),
     ]:
-        draw.text((PADDING, y), label.ljust(29) + receipt.get(key, '-').rjust(15), fill=TEXT_COLOR, font=font)
+        draw.text((PADDING, y), label, fill=TEXT_COLOR, font=font)
+        draw.text((amount_x, y), receipt.get(key, '-'), fill=TEXT_COLOR, font=font)
         y += get_text_height(font, label) + total_line_gap
 
     y += section_gap // 2
-    # Dash line at end
     draw.text((PADDING, y), dash_line, fill=TEXT_COLOR, font=font)
     y += get_text_height(font, dash_line) + section_gap
 
-    # Footer -- Welcome/Random Codes
+    # Footer
     welcome = "Welcome again"
     w = draw.textlength(welcome, font=font)
     draw.text(((RECEIPT_WIDTH - w) // 2, y), welcome, fill=TEXT_COLOR, font=font)
     y += get_text_height(font, welcome) + section_gap // 2
 
-    # Random bottom code (hash + AT code)
+    # Random code
     code_chars = string.digits + string.ascii_uppercase
     rand_code = '#' + ''.join(random.choices(code_chars, k=18))
     trans_code = '{AT' + ''.join(random.choices(string.digits, k=16)) + '}'

@@ -25,7 +25,6 @@ def draw_dashed_line(draw, y, width, font, dash="-"):
     draw.text((PADDING, y), line, fill=TEXT_COLOR, font=font)
 
 def generate_receipt_image(receipt, output_folder):
-    # Settings
     RECEIPT_WIDTH = 700
     RECEIPT_HEIGHT = 1100
     PADDING = 28
@@ -45,13 +44,11 @@ def generate_receipt_image(receipt, output_folder):
     font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
     y = PADDING
 
-    # Helper for text height
     def get_text_height(font, text):
         bbox = font.getbbox(text)
         return bbox[3] - bbox[1]
 
-    # Compute column positions
-    amount_width_max = 140  # Arbitrary, ensures right margin for amounts
+    amount_width_max = 140
     amount_x = RECEIPT_WIDTH - PADDING - amount_width_max
 
     # Merchant and address
@@ -96,7 +93,7 @@ def generate_receipt_image(receipt, output_folder):
     draw.text((PADDING, y), dash_line, fill=TEXT_COLOR, font=font)
     y += get_text_height(font, dash_line) + section_gap
 
-    # Totals section, pixel-aligned
+    # Totals and card number
     for (label, key) in [
         ("Subtotal", 'Subtotal'),
         ("Tax", 'Tax'),
@@ -107,6 +104,13 @@ def generate_receipt_image(receipt, output_folder):
         draw.text((PADDING, y), label, fill=TEXT_COLOR, font=font)
         draw.text((amount_x, y), receipt.get(key, '-'), fill=TEXT_COLOR, font=font)
         y += get_text_height(font, label) + total_line_gap
+
+        # Card Number (only after Card line, only if present)
+        if label == "Card" and receipt.get("Card Number", ""):
+            # shift left by 20 pixels (make this bigger if needed)
+            card_num_x = RECEIPT_WIDTH - PADDING - draw.textlength(receipt["Card Number"], font=font) - 5
+            draw.text((card_num_x, y), receipt["Card Number"], fill=TEXT_COLOR, font=font)
+            y += get_text_height(font, receipt["Card Number"]) + 2
 
     y += section_gap // 2
     draw.text((PADDING, y), dash_line, fill=TEXT_COLOR, font=font)
@@ -135,7 +139,7 @@ def generate_receipt_image(receipt, output_folder):
     print(f"Saved receipt image: {output_path}")
 
 def main():
-    json_file = 'receipts_complete.json'
+    json_file = 'receipts_augmented_with_card.json'
     output_folder = 'receipt_images'
     os.makedirs(output_folder, exist_ok=True)
 

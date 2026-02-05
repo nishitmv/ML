@@ -110,17 +110,24 @@ class QwenMultiHeadClassifier(nn.Module):
         self.type_head = nn.Linear(self.config.hidden_size, num_type_labels)
         self.code_head = nn.Linear(self.config.hidden_size, num_code_labels)
 
+        self.type_head.to(self.qwen.dtype)
+        self.code_head.to(self.qwen.dtype)
+
         self.loss_fn = nn.CrossEntropyLoss()
 
-        def forward(self, input_ids, attention_mask=None, token_type_ids=None,
+    def forward(self, input_ids, attention_mask=None,
                     labels_type = None, labels_code = None, **kwargs):
-            outputs = self.qwen(input_ids, attention_mask, token_type_ids, labels_type, labels_code, **kwargs)
-
+            outputs = self.qwen(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            output_hidden_states=True,
+            return_dict=True
+        )
             # Extract Last Token Embedding (EOS token), for LLMs, use Last Hidden State of last token
             # shape : [batch, seq_length, hidden]
             last_hidden_state = outputs.last_hidden_state
-            print( "Shape of last hidden state %",last_hidden_state.shape )
-
+            #print( "Shape of last hidden state %",last_hidden_state.shape )
+            #Shape of last hidden state = torch.Size([32, 64, 1536])
             # Get Embedding of las token for Classification
             if self.config.pad_token_id is None:  # Fallback if no pad token
                 sequence_lengths = -1
@@ -232,8 +239,6 @@ for company in companies:
         model.qwen.add_adapter(adapter_name=adapter_name, peft_config=peft_config)
     except ValueError:
         pass  # Adapter might already exist if resuming
-
-    model.set_adapter(adapter_name)
 
     # C. Train
     training_args = TrainingArguments(

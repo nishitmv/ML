@@ -22,19 +22,15 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
 
 
-# In[4]:
+# In[2]:
 
 
 def get_company_dataset(company, tokenizer, max_length=64, test_size=0.2):
-    """
-    Reads a CSV file, processes it for ModernBERT Multi-Head classification,
-    and returns Train/Val datasets + dimensions for the model heads.
-    """
-    # 1. Load Data
+
     df = pd.read_csv(f"{company}.csv")
 
-    # 2. Label Encoding (Local to this company/dataset)
-    # If you need global consistency across companies, pass fitted encoders instead.
+    #  Label Encoding (Local to this company/dataset)
+    # If global consistency needed across companies, pass fitted encoders instead.
     type_encoder = LabelEncoder()
     code_encoder = LabelEncoder()
 
@@ -105,7 +101,7 @@ def get_company_dataset(company, tokenizer, max_length=64, test_size=0.2):
     }
 
 
-# In[3]:
+# In[4]:
 
 
 class QwenMultiHeadClassifier(nn.Module):
@@ -114,9 +110,13 @@ class QwenMultiHeadClassifier(nn.Module):
         self.config = AutoConfig.from_pretrained(model_id)
         self.qwen = AutoModel.from_pretrained(
             model_id,
-            trust_remote_code=True,
-            device_map='auto'
+            #allows the library to download and execute custom Python code found in the model's Hugging Face Hub repository, 
+            #rather than using the standard code built into the transformers librar
+            trust_remote_code=True, 
+            device_map='auto' # CUDA
         )
+
+        print(f"VANILLA QWEN ARCHITECTURE : \n {self.qwen}")
 
         if lora_config is not None:
             self.qwen = get_peft_model(self.qwen, lora_config)
@@ -127,7 +127,8 @@ class QwenMultiHeadClassifier(nn.Module):
         self.type_head = nn.Linear(self.config.hidden_size, num_type_labels)
         self.code_head = nn.Linear(self.config.hidden_size, num_code_labels)
 
-        self.type_head.to(self.qwen.dtype)
+        # changing heads added to QWEN Data Type DFloat16 
+        self.type_head.to(self.qwen.dtype) 
         self.code_head.to(self.qwen.dtype)
 
         self.loss_fn = nn.CrossEntropyLoss()
@@ -145,7 +146,7 @@ class QwenMultiHeadClassifier(nn.Module):
             last_hidden_state = outputs.last_hidden_state
             #print( "Shape of last hidden state %",last_hidden_state.shape )
             #Shape of last hidden state = torch.Size([32, 64, 1536])
-            # Get Embedding of las token for Classification
+            # Get Embedding of last token for Classification
             if self.config.pad_token_id is None:  # Fallback if no pad token
                 sequence_lengths = -1
             else:
@@ -157,9 +158,11 @@ class QwenMultiHeadClassifier(nn.Module):
             # Get the Vector for last token in the sequence using sequence lenght calced above
             #last_hidden_state shape: (Batch_Size, Sequence_Length, Hidden_Size)
             # last_hidden_state[0] = batch size
-            # sequence_lengths conatins last token indexes for each sequence .
+            # sequence_lengths contains last token indexes for each sequence .
+            # Last token is sequence is like CLS token it has learnt about the sequence 
             pooled_output = last_hidden_state[torch.arange(last_hidden_state.shape[0]), sequence_lengths]
 
+            # Pass it tot he linear layers like we do CLS Token in Transforemrs
             logits_type = self.type_head(pooled_output)
             logits_code = self.code_head(pooled_output)
 
@@ -177,7 +180,7 @@ class QwenMultiHeadClassifier(nn.Module):
                 "logits": (logits_type, logits_code)
                 }
 
-            # Add optional keys ONLY if they are not None
+            # Add optional keys ONLY if they are not None, this is to avoid failure in Validation Run
             if loss is not None:
                 output["loss"] = loss
 
@@ -191,12 +194,12 @@ class QwenMultiHeadClassifier(nn.Module):
 
 
 
-# In[2]:
+# In[5]:
 
 
 class CustomTrainer(Trainer):
     def save_model(self, output_dir=None, _internal_call=False):
-        # 1. Save the LoRA adapters (standard behavior)
+        # Save the LoRA adapters (standard behavior)
         # Checks if model is wrapped in PEFT
         if output_dir is None:
             output_dir = self.args.output_dir
@@ -204,7 +207,7 @@ class CustomTrainer(Trainer):
         # Save LoRA weights
         self.model.qwen.save_pretrained(output_dir)
 
-        # 2. MANUALLY save your custom heads
+        # MANUALLY save your custom heads
         torch.save(self.model.type_head.state_dict(), f"{output_dir}/type_head.bin")
         torch.save(self.model.code_head.state_dict(), f"{output_dir}/code_head.bin")
 
@@ -222,14 +225,19 @@ tokenizer = AutoTokenizer.from_pretrained(model_id,  trust_remote_code=True,  us
 tokenizer.pad_token = tokenizer.eos_token
 
 
-companies = ["company_D", "company_E", "company_F"]  # Your list of
+companies = ["company_D", "company_E", "company_F"]  #  list of companies
 
 peft_config = LoraConfig(
-    task_type=TaskType.FEATURE_EXTRACTION,  # Using custom model, so generic task
-    r=16,
-    lora_alpha=32,
-    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
-    lora_dropout=0.05
+    #treat the Qwen backbone as a feature extractor.as we have custom multihead QWEN ,
+    # normal classification this would have been SEQ_CLS
+    # classification heads are external to the PEFT wrapper here
+    task_type=TaskType.FEATURE_EXTRACTION, 
+    r=16, # 16 RANk is good , LORA Mattrices will be A X R and R X B . 
+    lora_alpha=32, # Scales Output of Lora adapter by Alpha / Rank . ( 32/16 for us) , Makes learnt weights LOUDER compared to base model weights .
+    #Scale of 2 is good . 
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], # Q K V and Output Projections selected to train as part of adapter 
+    # MLP Layers are gate_proj, up_proj, down_proj , but results in very large number of paramters to learn but also gives huge accuracy benefit . 
+    lora_dropout=0.05 # Prevents overfittig whern data sizes are small like our company data case. 
 )
 
 
@@ -237,14 +245,10 @@ peft_config = LoraConfig(
 for company in companies:
     print(f"Training adapter for: {company}")
 
-    # A. Get Data for this Company
-    # Assume get_company_dataset returns a formatted HF Dataset
     # Format: "Merchant Group: {grp} [SEP] Merchant Name: {name}"
-    # 1. Get the data bundle
     data_bundle = get_company_dataset(company, tokenizer)
 
 
-    # 2. Extract components
     train_dataset = data_bundle["train"]
     val_dataset = data_bundle["val"]
     num_type_labels = data_bundle["num_type_labels"]
@@ -257,7 +261,6 @@ for company in companies:
         lora_config=peft_config
     )
 
-    # B. Manage Adapters
     # If it's the first run, the 'default' adapter is active.
     # For subsequent runs, we add a new adapter.
     adapter_name = f"adapter_{company}"
@@ -290,7 +293,7 @@ for company in companies:
 
 
     save_path = f"./final_adapters/{company}"
-    # D. Save Adapter & Heads
+    # Save Adapter & Heads
     # This saves the LoRA weights
     model.qwen.save_pretrained(save_path)
     torch.save(model.type_head.state_dict(), os.path.join(save_path, "type_head.bin"))
@@ -300,7 +303,7 @@ for company in companies:
     model.qwen.delete_adapter(adapter_name)
 
 
-# In[11]:
+# In[6]:
 
 
 import torch
@@ -318,11 +321,16 @@ if tokenizer.pad_token is None:
 
 # Define standard LoRA Config (Must match training!)
 peft_config = LoraConfig(
-    task_type=TaskType.FEATURE_EXTRACTION,
-    r=16,
-    lora_alpha=32,
-    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
-    lora_dropout=0.05
+    #  treat the Qwen backbone as a feature extractor.as we have custom multihead QWEN ,
+    # normal classification this would have been SEQ_CLS
+    # classification heads are external to the PEFT wrapper here
+    task_type=TaskType.FEATURE_EXTRACTION, 
+    r=16, # 16 RANk is good , LORA Mattrices will be A X R and R X B . 
+    lora_alpha=32, # Scales Output of Lora adapter by Alpha / Rank . ( 32/16 for us) , Makes learnt weights LOUDER compared to base model weights .
+    #Scale of 2 is good . 
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], # Q K V and Output Projections selected to train as part of adapter 
+    # MLP Layers are gate_proj, up_proj, down_proj , but results in very large number of paramters to learn but also gives huge accuracy benefit . 
+    lora_dropout=0.05 # Prevents overfittig whern data sizes are small like our company data case. 
 )
 
 def preprocess_logits_for_metrics(logits, labels):
@@ -338,6 +346,8 @@ base_model_wrapper = QwenMultiHeadClassifier(
     num_type_labels=2, # Dummy
     num_code_labels=2  # Dummy
 )
+
+print(f"QWEn Multihead with 2 linear heads :\n {base_model_wrapper}")
 
 # CRITICAL FIX 1: Resize Embeddings immediately
 # This prevents "device-side assert" errors if tokenizer > model

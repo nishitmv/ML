@@ -101,6 +101,73 @@ def get_company_dataset(company, tokenizer, max_length=64, test_size=0.2):
     }
 
 
+# In[3]:
+
+
+def get_company_dataset_Hard_Val(company, tokenizer, max_length=64):
+
+    df = pd.read_csv(f"hard_val_{company}.csv")
+
+    #  Label Encoding (Local to this company/dataset)
+    # If global consistency needed across companies, pass fitted encoders instead.
+    type_encoder = LabelEncoder()
+    code_encoder = LabelEncoder()
+
+    df['cc_type_id'] = type_encoder.fit_transform(df['cc_type'])
+    df['cc_code_id'] = code_encoder.fit_transform(df['cc_code'])
+
+    # Calculate dimensions for the model heads
+    num_type_labels = len(type_encoder.classes_)
+    num_code_labels = len(code_encoder.classes_)
+
+    print(f"Dataset Loaded: {len(df)} records")
+    print(f"Found {num_type_labels} Transaction Types and {num_code_labels} GL Codes.")
+
+    # 3. Stratified Train/Test Split
+    # We create a temporary 'stratify_col' to ensure both Type and Code distributions are preserved
+    df['stratify_col'] = df['cc_type'].astype(str) + "_" + df['cc_code'].astype(str)
+
+    # Cleanup auxiliary columns
+    cols_to_keep = ['merchant_group', 'merchant_name', 'cc_type_id', 'cc_code_id']
+
+    val_df = df[cols_to_keep]
+
+    val_dataset = Dataset.from_pandas(val_df, preserve_index=False)
+
+
+    # 5. Tokenization Function
+    def preprocess_function(examples):
+        # Manual concatenation for Qwen/LLMs
+        inputs = [f"{g} | {n}" for g, n in zip(examples["merchant_group"], examples["merchant_name"])]
+
+        tokenized_inputs = tokenizer(
+            inputs,  # Single list of strings
+            truncation=True,
+            max_length=max_length,
+            padding="max_length"  # Or False if using DataCollator
+        )
+
+        tokenized_inputs["labels_type"] = examples["cc_type_id"]
+        tokenized_inputs["labels_code"] = examples["cc_code_id"]
+        return tokenized_inputs
+
+    # 6. Apply Processing
+    # We remove the text columns to leave only the tensors
+    remove_cols = val_dataset.column_names
+    val_dataset = val_dataset.map(preprocess_function, batched=True, remove_columns=remove_cols)
+
+    # 7. Set Format for PyTorch
+    target_columns = ["input_ids", "attention_mask", "labels_type", "labels_code"]
+    val_dataset.set_format(type="torch", columns=target_columns)
+
+    return {
+        "val": val_dataset,
+        "num_type_labels": num_type_labels,
+        "num_code_labels": num_code_labels,
+        "encoders": {"type": type_encoder, "code": code_encoder}
+    }
+
+
 # In[4]:
 
 
@@ -113,7 +180,7 @@ class QwenMultiHeadClassifier(nn.Module):
             #allows the library to download and execute custom Python code found in the model's Hugging Face Hub repository, 
             #rather than using the standard code built into the transformers librar
             trust_remote_code=True, 
-            device_map='auto' # CUDA
+            device_map=None # CUDA
         )
 
         print(f"VANILLA QWEN ARCHITECTURE : \n {self.qwen}")
@@ -216,7 +283,7 @@ class CustomTrainer(Trainer):
 
 
 
-# In[5]:
+# In[ ]:
 
 
 model_id = "Qwen/Qwen2.5-1.5B"
@@ -232,12 +299,12 @@ peft_config = LoraConfig(
     # normal classification this would have been SEQ_CLS
     # classification heads are external to the PEFT wrapper here
     task_type=TaskType.FEATURE_EXTRACTION, 
-    r=16, # 16 RANk is good , LORA Mattrices will be A X R and R X B . 
-    lora_alpha=32, # Scales Output of Lora adapter by Alpha / Rank . ( 32/16 for us) , Makes learnt weights LOUDER compared to base model weights .
+    r=8, # 16 RANk is good , LORA Mattrices will be A X R and R X B . 
+    lora_alpha=16, # Scales Output of Lora adapter by Alpha / Rank . ( 32/16 for us) , Makes learnt weights LOUDER compared to base model weights .
     #Scale of 2 is good . 
     target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], # Q K V and Output Projections selected to train as part of adapter 
     # MLP Layers are gate_proj, up_proj, down_proj , but results in very large number of paramters to learn but also gives huge accuracy benefit . 
-    lora_dropout=0.05 # Prevents overfittig whern data sizes are small like our company data case. 
+    lora_dropout=0.2 # Prevents overfittig whern data sizes are small like our company data case. 
 )
 
 
@@ -303,7 +370,7 @@ for company in companies:
     model.qwen.delete_adapter(adapter_name)
 
 
-# In[6]:
+# In[ ]:
 
 
 import torch
@@ -325,8 +392,8 @@ peft_config = LoraConfig(
     # normal classification this would have been SEQ_CLS
     # classification heads are external to the PEFT wrapper here
     task_type=TaskType.FEATURE_EXTRACTION, 
-    r=16, # 16 RANk is good , LORA Mattrices will be A X R and R X B . 
-    lora_alpha=32, # Scales Output of Lora adapter by Alpha / Rank . ( 32/16 for us) , Makes learnt weights LOUDER compared to base model weights .
+    r=8, # 16 RANk is good , LORA Mattrices will be A X R and R X B . 
+    lora_alpha=16, # Scales Output of Lora adapter by Alpha / Rank . ( 32/16 for us) , Makes learnt weights LOUDER compared to base model weights .
     #Scale of 2 is good . 
     target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], # Q K V and Output Projections selected to train as part of adapter 
     # MLP Layers are gate_proj, up_proj, down_proj , but results in very large number of paramters to learn but also gives huge accuracy benefit . 
@@ -474,7 +541,7 @@ companies = ["company_D", "company_E", "company_F"]
 
 for company in companies:
     # Get Data
-    data_bundle = get_company_dataset(company, tokenizer)
+    data_bundle = get_company_dataset_Hard_Val(company, tokenizer)
 
     # Validate using the SHARED model instance
     res = validate_company(base_model_wrapper, company, "./final_adapters", data_bundle['val'])
